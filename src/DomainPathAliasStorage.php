@@ -3,6 +3,7 @@
 namespace Drupal\domain_path;
 
 use Drupal\Core\Path\AliasStorage;
+use Drupal\Core\Language\LanguageInterface;
 
 /**
  * Overrides AliasStorage.
@@ -32,6 +33,46 @@ class DomainPathAliasStorage extends AliasStorage {
 
     try {
       return (bool) $query->execute()->fetchField();
+    }
+    catch (\Exception $e) {
+      $this->catchException($e);
+      return FALSE;
+    }
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function lookupPathSource($path, $langcode) {
+    $alias = $this->connection->escapeLike($path);
+    $langcode_list = [$langcode, LanguageInterface::LANGCODE_NOT_SPECIFIED];
+
+    // See the queries above. Use LIKE for case-insensitive matching.
+    $select = $this->connection->select(static::TABLE, 'ua')
+      ->fields('ua', ['source'])
+      ->condition('ua.alias', $alias, 'LIKE');
+
+    // Inner join provided current domain ID.
+    if ($domain = \Drupal::service('domain.negotiator')->getActiveDomain()) {
+      $select->innerJoin('node_access', 'na', "CONCAT('/node/', CAST(na.nid AS CHAR)) = ua.source");
+      $select->condition('na.realm', 'domain_id');
+      $select->condition('na.gid', $domain->getDomainId());
+    }
+
+    if ($langcode == LanguageInterface::LANGCODE_NOT_SPECIFIED) {
+      array_pop($langcode_list);
+    }
+    elseif ($langcode > LanguageInterface::LANGCODE_NOT_SPECIFIED) {
+      $select->orderBy('ua.langcode', 'DESC');
+    }
+    else {
+      $select->orderBy('ua.langcode', 'ASC');
+    }
+
+    $select->orderBy('ua.pid', 'DESC');
+    $select->condition('ua.langcode', $langcode_list, 'IN');
+    try {
+      return $select->execute()->fetchField();
     }
     catch (\Exception $e) {
       $this->catchException($e);
