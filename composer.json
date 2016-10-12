@@ -1,0 +1,8 @@
+{
+    "name": "davidgrayston/domain_path",
+    "description": "Domain Path",
+    "type": "drupal-module",
+    "license": "GPL-2.0+",
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
