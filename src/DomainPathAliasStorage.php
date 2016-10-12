@@ -22,25 +22,17 @@ class DomainPathAliasStorage extends AliasStorage {
     // Inner join provided domain_id.
     if (strpos($source, '/node/') === 0) {
       $query->innerJoin('node_access', 'na', "CONCAT('/node/', CAST(na.nid AS CHAR)) = ua.source");
-      $or = new Condition('OR');
 
       // Domain ID condition (the current domain).
       if (!empty($domain_id)) {
-        $domain_id_condition = new Condition('AND');
-        $domain_id_condition->condition('na.realm', 'domain_id');
-        $domain_id_condition->condition('na.gid', $domain_id);
-        $or->condition($domain_id_condition);
+        $query->condition('na.realm', 'domain_id');
+        $query->condition('na.gid', $domain_id);
       }
       else {
         // Domain site condition (all affiliates).
-        $domain_site_condition = new Condition('AND');
-        $domain_site_condition->condition('na.realm', 'domain_site');
-        $domain_site_condition->condition('na.gid', '0');
-        $or->condition($domain_site_condition);
+        $query->condition('na.realm', 'domain_site');
+        $query->condition('na.gid', '0');
       }
-
-      // Add OR condition to query.
-      $query->condition($or);
     }
 
     if (!empty($source)) {
