@@ -4,6 +4,7 @@ namespace Drupal\domain_path;
 
 use Drupal\Core\Path\AliasStorage;
 use Drupal\Core\Language\LanguageInterface;
+use Drupal\Core\Database\Query\Condition;
 
 /**
  * Overrides AliasStorage.
@@ -12,7 +13,7 @@ class DomainPathAliasStorage extends AliasStorage {
   /**
    * {@inheritdoc}
    */
-  public function domainAliasExists($alias, $langcode, $source = NULL, $domain_id) {
+  public function domainAliasExists($alias, $langcode, $source = NULL, $domain_id = NULL) {
     // Use LIKE and NOT LIKE for case-insensitive matching.
     $query = $this->connection->select(static::TABLE, 'ua')
       ->condition('ua.alias', $this->connection->escapeLike($alias), 'LIKE')
@@ -21,8 +22,25 @@ class DomainPathAliasStorage extends AliasStorage {
     // Inner join provided domain_id.
     if (strpos($source, '/node/') === 0) {
       $query->innerJoin('node_access', 'na', "CONCAT('/node/', CAST(na.nid AS CHAR)) = ua.source");
-      $query->condition('na.realm', 'domain_id');
-      $query->condition('na.gid', $domain_id);
+      $or = new Condition('OR');
+
+      // Domain ID condition (the current domain).
+      if (!empty($domain_id)) {
+        $domain_id_condition = new Condition('AND');
+        $domain_id_condition->condition('na.realm', 'domain_id');
+        $domain_id_condition->condition('na.gid', $domain_id);
+        $or->condition($domain_id_condition);
+      }
+      else {
+        // Domain site condition (all affiliates).
+        $domain_site_condition = new Condition('AND');
+        $domain_site_condition->condition('na.realm', 'domain_site');
+        $domain_site_condition->condition('na.gid', '0');
+        $or->condition($domain_site_condition);
+      }
+
+      // Add OR condition to query.
+      $query->condition($or);
     }
 
     if (!empty($source)) {
@@ -55,8 +73,25 @@ class DomainPathAliasStorage extends AliasStorage {
     // Inner join provided current domain ID.
     if ($domain = \Drupal::service('domain.negotiator')->getActiveDomain()) {
       $select->innerJoin('node_access', 'na', "CONCAT('/node/', CAST(na.nid AS CHAR)) = ua.source");
-      $select->condition('na.realm', 'domain_id');
-      $select->condition('na.gid', $domain->getDomainId());
+      $or = new Condition('OR');
+
+      // Domain ID condition (the current domain).
+      $domain_id_condition = new Condition('AND');
+      $domain_id_condition->condition('na.realm', 'domain_id');
+      $domain_id_condition->condition('na.gid', $domain->getDomainId());
+      $or->condition($domain_id_condition);
+
+      // Domain site condition (all affiliates).
+      $domain_site_condition = new Condition('AND');
+      $domain_site_condition->condition('na.realm', 'domain_site');
+      $domain_site_condition->condition('na.gid', '0');
+      $or->condition($domain_site_condition);
+
+      // Add OR condition to query.
+      $select->condition($or);
+
+      // Order by gid so that domain specific path is preferred.
+      $select->orderBy('na.gid', 'DESC');
     }
 
     if ($langcode == LanguageInterface::LANGCODE_NOT_SPECIFIED) {
