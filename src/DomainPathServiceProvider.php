@@ -17,8 +17,6 @@ class DomainPathServiceProvider extends ServiceProviderBase implements ServiceMo
   public function alter(ContainerBuilder $container) {
     // Override path.alias_storage.
     $container->getDefinition('path.alias_storage')->setClass('Drupal\domain_path\DomainPathAliasStorage');
-    // Override path.alias_manager.
-    $container->getDefinition('path.alias_manager')->setClass('Drupal\domain_path\DomainPathAliasManager');
   }
 
 }
